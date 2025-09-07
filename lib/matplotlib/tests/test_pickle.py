@@ -237,3 +237,49 @@ def test_dynamic_norm():
 def test_vertexselector():
     line, = plt.plot([0, 1], picker=True)
     pickle.loads(pickle.dumps(VertexSelector(line)))
+
+
+def test_dpi_preservation_on_unpickling():
+    """
+    Test that figure DPI is not doubled when unpickling on macOS.
+    
+    This tests the fix for issue where _original_dpi was being 
+    overwritten during canvas recreation, leading to DPI doubling
+    when device pixel ratio scaling was applied.
+    """
+    # Create a figure with a specific DPI
+    original_dpi = 100.0
+    fig = plt.figure(dpi=original_dpi)
+    
+    # Simulate device pixel ratio scaling that would happen on macOS
+    # by manually setting the _original_dpi and scaling the DPI
+    if hasattr(fig, 'canvas') and hasattr(fig.canvas, '_set_device_pixel_ratio'):
+        # This simulates what happens on macOS retina displays
+        device_pixel_ratio = 2.0
+        fig.canvas._set_device_pixel_ratio(device_pixel_ratio)
+        scaled_dpi = fig.dpi  # Should be original_dpi * device_pixel_ratio
+        
+        # Now pickle and unpickle the figure
+        pickled_fig = pickle.dumps(fig)
+        unpickled_fig = pickle.loads(pickled_fig)
+        
+        # The DPI should remain the same after unpickling
+        assert unpickled_fig.dpi == scaled_dpi, \
+            f"DPI changed from {scaled_dpi} to {unpickled_fig.dpi} after unpickling"
+        
+        # The original DPI should be preserved
+        assert unpickled_fig._original_dpi == original_dpi, \
+            f"Original DPI changed from {original_dpi} to {unpickled_fig._original_dpi}"
+    
+    else:
+        # For non-macOS platforms, just test basic DPI preservation
+        pickled_fig = pickle.dumps(fig)
+        unpickled_fig = pickle.loads(pickled_fig)
+        
+        # The DPI should remain the same after unpickling
+        assert unpickled_fig.dpi == original_dpi, \
+            f"DPI changed from {original_dpi} to {unpickled_fig.dpi} after unpickling"
+    
+    plt.close(fig)
+    if 'unpickled_fig' in locals():
+        plt.close(unpickled_fig)
